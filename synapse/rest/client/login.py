@@ -85,7 +85,7 @@ class LoginRestServlet(RestServlet):
 
         # JWT configuration variables.
         self.jwt_enabled = hs.config.jwt.jwt_enabled
-        self.jwt_secret = hs.config.jwt.jwt_secret
+        self.jwt_secrets = hs.config.jwt.jwt_secrets
         self.jwt_subject_claim = hs.config.jwt.jwt_subject_claim
         self.jwt_algorithm = hs.config.jwt.jwt_algorithm
         self.jwt_issuer = hs.config.jwt.jwt_issuer
@@ -467,25 +467,29 @@ class LoginRestServlet(RestServlet):
         if self.jwt_audiences is not None:
             claim_options["aud"] = {"values": self.jwt_audiences, "essential": True}
 
-        try:
-            claims = jwt.decode(
-                token,
-                key=self.jwt_secret,
-                claims_cls=JWTClaims,
-                claims_options=claim_options,
-            )
-        except BadSignatureError:
-            # We handle this case separately to provide a better error message
+        jwt_decode_errors = []
+        for jwt_secret in self.jwt_secrets:
+            try:
+                claims = jwt.decode(
+                    token,
+                    key=jwt_secret,
+                    claims_cls=JWTClaims,
+                    claims_options=claim_options,
+                )
+                break
+            except BadSignatureError:
+                # We handle this case separately to provide a better error message
+                jwt_decode_errors.append(
+                    "JWT validation failed: Signature verification failed"
+                )
+            except JoseError as e:
+                # A JWT error occurred, return some info back to the client.
+                jwt_decode_errors.append("JWT validation failed: %s" % (str(e),))
+
+        if jwt_decode_errors:
             raise LoginError(
                 403,
-                "JWT validation failed: Signature verification failed",
-                errcode=Codes.FORBIDDEN,
-            )
-        except JoseError as e:
-            # A JWT error occurred, return some info back to the client.
-            raise LoginError(
-                403,
-                "JWT validation failed: %s" % (str(e),),
+                "Multiple JWT errors: %s" % jwt_decode_errors,
                 errcode=Codes.FORBIDDEN,
             )
 

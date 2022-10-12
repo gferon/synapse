@@ -27,7 +27,11 @@ class JWTConfig(Config):
         jwt_config = config.get("jwt_config", None)
         if jwt_config:
             self.jwt_enabled = jwt_config.get("enabled", False)
-            self.jwt_secret = jwt_config["secret"]
+            # It is supported to have 1+ JWT secrets
+            if isinstance(jwt_config["secret"], list):
+                self.jwt_secrets = jwt_config["secret"]
+            else:
+                self.jwt_secrets = [jwt_config["secret"]]
             self.jwt_algorithm = jwt_config["algorithm"]
 
             self.jwt_subject_claim = jwt_config.get("subject_claim", "sub")
